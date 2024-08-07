@@ -1,0 +1,40 @@
+name: 'initializes go caching'
+description: 'sets up golang pkg and build caching'
+
+inputs:
+  cache_key:
+    description: "cache_key is used as suffix to a generated cache key"
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: set go ENV variables
+      shell: bash
+      # id: go-env-vars
+      working-directory: ${{ inputs.git_directory }}
+      run: |+
+        GOMODCACHE=${{github.workspace}}/actions/go-mod-cache
+        GOCACHE=${{github.workspace}}/actions/go-cache
+
+        echo "GOMODCACHE=$GOMODCACHE" >> $GITHUB_OUTPUT
+        echo "GOCACHE=$GOCACHE" >> $GITHUB_OUTPUT
+
+        echo "GOMODCACHE=$GOMODCACHE" >> $GITHUB_ENV
+        echo "GOCACHE=$GOCACHE" >> $GITHUB_ENV
+
+        echo "FILES_HASH=${{ hashFiles('**/*.go', '**/go.mod', '**/go.sum')}}" >> $GITHUB_OUTPUT
+        echo "FILES_HASH=${{ hashFiles('**/*.go', '**/go.mod', '**/go.sum')}}" >> $GITHUB_ENV
+
+    - name: initializing gh cache
+      uses: actions/cache@v4
+      with:
+        path: |+
+          ${{ env.GOMODCACHE }}
+          ${{ env.GOCACHE }}
+        # key: go-${{ runner.os }}-accounts-api-${{ steps.env-vars-${{ inputs.cache_key }}.outputs.FILES_HASH }}
+        key: go-${{ runner.os }}-accounts-api-${{ env.FILES_HASH }}
+
+        save-always: true
+        restore-keys: go-${{ runner.os }}-accounts-api-
+
