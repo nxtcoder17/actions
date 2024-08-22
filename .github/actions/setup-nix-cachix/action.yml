@@ -35,7 +35,7 @@ runs:
       with:
         flake-lock-path: "${{ inputs.flake_lock }}"
 
-    - name: Nix Develop Action
+    - name: nix develop Action
       uses: nicknovitski/nix-develop@v1.1.0
       with:
         arguments: "${{ inputs.nix_develop_arguments }}"
