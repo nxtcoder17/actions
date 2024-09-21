@@ -1,5 +1,5 @@
 name: 'generate-image-tag'
-description: 'generates image tag, based on branch name or tag'
+description: 'generates container image tag, based on github branch/tag name'
 
 runs:
   using: 'composite'
@@ -14,8 +14,6 @@ runs:
         if [ $? -ne 0 ]; then
           IMAGE_TAG="$IMAGE_TAG-nightly"
         fi
-
-        echo "IMAGE_TAG: ${IMAGE_TAG}"
         set -e
 
         echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV

@@ -6,13 +6,17 @@ inputs:
     description: "cache_key is used as suffix to a generated cache key"
     required: true
 
+  working_directory:
+    description: "working_directory is used as PWD for tasks in this action"
+    required: false
+    default: "."
+
 runs:
   using: 'composite'
   steps:
-    - name: set go ENV variables
+    - name: setup go ENV variables
       shell: bash
-      # id: go-env-vars
-      working-directory: ${{ inputs.git_directory }}
+      working-directory: ${{ inputs.working_directory }}
       run: |+
         GOMODCACHE=${{github.workspace}}/actions/go-mod-cache
         GOCACHE=${{github.workspace}}/actions/go-cache
@@ -32,9 +36,8 @@ runs:
         path: |+
           ${{ env.GOMODCACHE }}
           ${{ env.GOCACHE }}
-        # key: go-${{ runner.os }}-accounts-api-${{ steps.env-vars-${{ inputs.cache_key }}.outputs.FILES_HASH }}
-        key: go-${{ runner.os }}-accounts-api-${{ env.FILES_HASH }}
+        key: go-${{ runner.os }}-${{ inputs.cache_key }}-${{ env.FILES_HASH }}
 
         save-always: true
-        restore-keys: go-${{ runner.os }}-accounts-api-
+        restore-keys: go-${{ runner.os }}-${{ inputs.cache_key }}-
 
