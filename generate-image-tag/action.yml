@@ -16,8 +16,8 @@ runs:
         fi
         set -e
 
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        echo "OVERRIDE_PUSHED_IMAGE=true" >> $GITHUB_ENV
+        echo "IMAGE_TAG=$IMAGE_TAG" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
+        echo "OVERRIDE_PUSHED_IMAGE=true"  | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
 
     - name: Create Image Tag from tag
       if: startsWith(github.ref, 'refs/tags/')
@@ -25,5 +25,5 @@ runs:
       run: |
         IMAGE_TAG=$(echo ${GITHUB_REF#refs/tags/})
 
-        echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_ENV
-        echo "OVERRIDE_PUSHED_IMAGE=false" >> $GITHUB_ENV
+        echo "IMAGE_TAG=$IMAGE_TAG" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
+        echo "OVERRIDE_PUSHED_IMAGE=false"  | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
