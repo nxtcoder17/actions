@@ -5,15 +5,22 @@ runs:
   using: 'composite'
   steps:
     - name: Create Image Tag from branch name
-      if: startsWith(github.ref, 'refs/heads/release')
+      if: startsWith(github.ref, 'refs/heads/')
       shell: bash
       run: |
         set +e
-        IMAGE_TAG=$(echo ${GITHUB_REF#refs/heads/release-})
-        echo "$IMAGE_TAG" | grep -i '\-nightly$'
-        if [ $? -ne 0 ]; then
-          IMAGE_TAG="$IMAGE_TAG-nightly"
+        IMAGE_TAG=$(echo ${GITHUB_REF#refs/heads/})
+
+        if  [[ $IMAGE_TAG == release-* ]]; then
+          echo "$IMAGE_TAG" | grep -i '\-nightly$'
+          if [ $? -ne 0 ]; then
+            IMAGE_TAG=${IMAGE_TAG#release-}
+            IMAGE_TAG="$IMAGE_TAG-nightly"
+          fi
+        else
+          IMAGE_TAG=$( echo $IMAGE_TAG | sed 's/[^a-zA-Z0-9]/-/g')
         fi
+
         set -e
 
         echo "IMAGE_TAG=$IMAGE_TAG" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT

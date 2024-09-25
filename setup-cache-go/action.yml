@@ -21,14 +21,10 @@ runs:
         GOMODCACHE=${{github.workspace}}/actions/go-mod-cache
         GOCACHE=${{github.workspace}}/actions/go-cache
 
-        echo "GOMODCACHE=$GOMODCACHE" >> $GITHUB_OUTPUT
-        echo "GOCACHE=$GOCACHE" >> $GITHUB_OUTPUT
+        echo "GOMODCACHE=$GOMODCACHE" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
+        echo "GOCACHE=$GOCACHE" | tee -a $GITHUB_OUTPUT | tee -a $GITHUB_OUTPUT
 
-        echo "GOMODCACHE=$GOMODCACHE" >> $GITHUB_ENV
-        echo "GOCACHE=$GOCACHE" >> $GITHUB_ENV
-
-        echo "FILES_HASH=${{ hashFiles('**/*.go', '**/go.mod', '**/go.sum')}}" >> $GITHUB_OUTPUT
-        echo "FILES_HASH=${{ hashFiles('**/*.go', '**/go.mod', '**/go.sum')}}" >> $GITHUB_ENV
+        echo "FILES_HASH=${{ hashFiles('**/*.go', '**/go.mod', '**/go.sum')}}" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
 
     - name: initializing gh cache
       uses: actions/cache@v4
