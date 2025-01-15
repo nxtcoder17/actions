@@ -1,0 +1,84 @@
+name: 'Terraform Plan'
+description: 'does terraform planning'
+
+inputs:
+  github_token:
+    description: 'GITHUB_TOKEN or a repo scoped PAT.'
+    required: true
+
+  working_directory:
+    description: "working_directory is used as PWD for tasks in this action"
+    required: false
+    default: "."
+
+  terraform_version: 
+    description: 'Terraform Version'
+    required: true
+    default: 1.10.4
+
+  pr_number:
+    description: 'PR number if any'
+    required: true
+
+outputs:
+  PLAN_ARTIFACT_NAME:
+    description: "Terraform Plan Artifact Name"
+    value: "${{ inputs.pr_number }}-tf"
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      run: |
+        pushd ${{ inputs.working_directory }}
+        terraform init -reconfigure
+        popd
+
+    - name: Terraform Plan
+      id: plan
+      working-directory: ${{ inputs.working_directory }}
+      shell: bash
+      run: |
+        plan_output_dir="$PWD/.tf-plan"
+        mkdir $plan_output_dir
+
+        echo 'PLAN_STDOUT<<EOF' >> $GITHUB_OUTPUT
+        terraform plan -no-color -out=$plan_output_dir/tfplan >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+
+        echo "${{ inputs.working_directory }}" > $plan_output_dir/working-dir
+
+        echo "PLAN_OUTPUT_DIR=$plan_output_dir" | tee -a $GITHUB_ENV | tee -a $GITHUB_OUTPUT
+
+    - name: Save Artifact
+      id: save-plan
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.pr_number }}-tf
+        github_token: ${{ inputs.GITHUB_TOKEN }}
+        path: |
+          ${{ steps.plan.outputs.PLAN_OUTPUT_DIR }}/tfplan
+          ${{ steps.plan.outputs.PLAN_OUTPUT_DIR }}/working-dir
+
+    - name: Terraform Plan Comment
+      uses: nxtcoder17/actions/issue-comment@feat/tf-issues-and-pr
+      # uses: ../issue-comment
+      with:
+        github_token: ${{ inputs.GITHUB_TOKEN }}
+        issue_number: ${{ inputs.pr_number }}
+        body: |
+          Terraform Plan:
+
+          ```
+          ${{ steps.plan.outputs.PLAN_STDOUT }}
+          ```
+
+          Plan has been saved as a [Github Artifact](${{ steps.save-plan.outputs.artifact-url }})
