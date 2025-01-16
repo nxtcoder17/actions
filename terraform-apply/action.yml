@@ -1,25 +1,24 @@
-name: 'Terraform Plan'
-description: 'does terraform planning'
+name: "Terraform Apply"
+description: "applies an already generated terraform plan"
 
 inputs:
-  working_directory:
-    description: "working_directory is used as PWD for tasks in this action"
-    required: false
-    default: "."
-
   terraform_version: 
     description: 'Terraform Version'
     required: true
     default: 1.10.4
 
+  working_directory:
+    description: 'working directory'
+    required: true
+
   plan_file:
-    description: 'filepath where to save terraform plan file'
+    description: 'Already Created Terraform Plan file'
     required: true
 
 outputs:
-  TF_PLAN_STDOUT:
-    description: "stdout of command terraform plan"
-    value: ${{ steps.plan.outputs.PLAN_STDOUT }}
+  TF_APPLY_STDOUT:
+    description: "stdout for terraform apply command"
+    value: ${{ steps.tf-apply.outputs.APPLY_STDOUT }}
 
 runs:
   using: 'composite'
@@ -31,20 +30,18 @@ runs:
         terraform_wrapper: false
 
     - name: Terraform Init
-      id: init
       shell: bash
       run: |
         pushd ${{ inputs.working_directory }}
-        terraform init -reconfigure
+        terraform init
         popd
 
-    - name: Terraform Plan
-      id: plan
+    - name: Terraform Apply
+      id: tf-apply
       shell: bash
       run: |
         pushd ${{ inputs.working_directory }}
-        echo 'PLAN_STDOUT<<EOF' >> $GITHUB_OUTPUT
-        terraform plan -no-color -out="${{ inputs.plan_file }}" >> $GITHUB_OUTPUT
+        echo 'APPLY_STDOUT<<EOF' >> $GITHUB_OUTPUT
+        terraform apply -input=false -no-color ${{ inputs.plan_file }} >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
         popd
-
