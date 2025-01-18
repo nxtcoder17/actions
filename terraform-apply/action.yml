@@ -45,3 +45,4 @@ runs:
         terraform apply -input=false -no-color ${{ inputs.plan_file }} >> $GITHUB_OUTPUT
         echo 'EOF' >> $GITHUB_OUTPUT
         popd
+
