@@ -1,0 +1,50 @@
+name: 'Terraform Plan'
+description: 'does terraform planning'
+
+inputs:
+  working_directory:
+    description: "working_directory is used as PWD for tasks in this action"
+    required: false
+    default: "."
+
+  terraform_version: 
+    description: 'Terraform Version'
+    required: true
+    default: 1.10.4
+
+  plan_file:
+    description: 'filepath where to save terraform plan file'
+    required: true
+
+outputs:
+  TF_PLAN_STDOUT:
+    description: "stdout of command terraform plan"
+    value: ${{ steps.plan.outputs.PLAN_STDOUT }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      id: init
+      shell: bash
+      run: |
+        pushd ${{ inputs.working_directory }}
+        terraform init -reconfigure
+        popd
+
+    - name: Terraform Plan
+      id: plan
+      shell: bash
+      run: |
+        pushd ${{ inputs.working_directory }}
+        echo 'PLAN_STDOUT<<EOF' >> $GITHUB_OUTPUT
+        terraform plan -no-color -out="${{ inputs.plan_file }}" >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+        popd
+

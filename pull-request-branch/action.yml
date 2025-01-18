@@ -1,0 +1,58 @@
+name: "PullRequest Branch"
+description: "extracts pull request branch information based on github_ref for a pull request"
+
+inputs:
+  github_token:
+    description: 'GITHUB_TOKEN or a repo scoped PAT.'
+    required: true
+
+  pull_request_number: 
+    description: 'PullRequest Number'
+
+outputs:
+  PR_NUMBER:
+    description: "PR number"
+    value: ${{ steps.pr.outputs.PR_NUMBER }}
+
+  PR_BRANCH:
+    description: "PR branch"
+    value: ${{ steps.pr.outputs.PR_BRANCH }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get PR branch from PR number
+      if: ${{ inputs.pull_request_number != '' }}
+      id: pr_from_number
+      shell: bash
+      run: |+
+        echo "PR_NUMBER=${{ inputs.pull_request_number }}" | tee -a $GITHUB_OUTPUT
+
+        gh pr list --json headRefName,number -q "map(select(.number == ${{inputs.pull_request_number}} )) | first | .headRefName // \"Not Found\"" > pr_branch.txt
+
+        pr_branch=$(cat pr_branch.txt)
+        echo "PR_BRANCH=$pr_branch" | tee -a $GITHUB_OUTPUT
+
+    - name: Get PR branch from URL
+      if: ${{ inputs.pull_request_number == '' }}
+      id: pr_from_github_ref
+      shell: bash
+      run: |+
+        pr_number=$( echo ${{ github.ref }} | sed 's/refs[/]pull[/]//' | sed 's/[/]merge//' )
+        gh pr list --json headRefName,number -q "map(select(.number == $pr_number )) | first | .headRefName // \"Not Found\"" > pr_branch.txt
+        pr_branch=$(cat pr_branch.txt)
+
+        echo "PR_NUMBER=$pr_number" | tee -a $GITHUB_OUTPUT
+        echo "PR_BRANCH=$pr_branch" | tee -a $GITHUB_OUTPUT
+
+    - name: Get PR Branch
+      shell: bash
+      id: pr
+      run: |+
+        if [ -n "${{ inputs.pull_request_number}}" ]; then
+          echo "PR_NUMBER=${{ inputs.pull_request_number }}" | tee -a $GITHUB_OUTPUT
+          echo "PR_BRANCH=${{ steps.pr_from_number.outputs.PR_BRANCH }}" | tee -a $GITHUB_OUTPUT
+        else
+          echo "PR_NUMBER=${{ steps.pr_from_github_ref.outputs.PR_NUMBER }}" | tee -a $GITHUB_OUTPUT
+          echo "PR_BRANCH=${{ steps.pr_from_github_ref.outputs.PR_BRANCH }}" | tee -a $GITHUB_OUTPUT
+        fi

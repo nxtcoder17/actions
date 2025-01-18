@@ -1,0 +1,42 @@
+name: "Download Workflow Artifact"
+description: "Download Artifacts created during other workflows"
+
+inputs:
+  github_token:
+    description: "Github Token"
+    type: string
+    required: true
+
+  workflow_name:
+    description: "Other Workflow Name"
+    type: string
+    required: true
+
+  artifact_name:
+    description: "Artifact Name to download"
+    type: string
+    required: true
+
+  destination:
+    description: "Destination directory to store download into"
+    type: string
+    required: true
+
+  repository:
+    description: "[Optional] Only specify, if not referring to current repository"
+    type: string
+    default: ${{ github.repository }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Download from github artifacts
+      id: download-plan
+      shell: bash
+      env:
+        GITHUB_TOKEN: ${{ inputs.github_token }}
+      run: |+
+        set -e 
+        run_id=$(gh run ls -R "${{ inputs.repository }}" --workflow="${{ inputs.workflow_name }}" --json number,databaseId -q 'first | .databaseId')
+        gh run download "$run_id" -n "${{ inputs.artifact_name }}" -D "${{ inputs.destination }}"
+        set +e

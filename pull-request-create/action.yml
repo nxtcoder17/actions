@@ -1,0 +1,50 @@
+name: 'PullRequest Create'
+description: 'creates a pull request'
+
+inputs:
+  github_token:
+    description: 'GITHUB_TOKEN or a repo scoped PAT.'
+    required: true
+
+  title:
+    description: 'PR title'
+    required: true
+
+  body:
+    description: 'PR body'
+    required: true
+
+outputs:
+  PR_ID:
+    description: "PR ID of created PR"
+    value: ${{ steps.pr.outputs.PR_ID }}
+
+  PR_NUMBER:
+    description: "PR number of created PR"
+    value: ${{ steps.pr.outputs.PR_NUMBER }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: create a PR
+      id: pr
+      shell: bash
+      env:
+        TITLE: ${{ inputs.title }}
+      run: |+
+        set +e
+        pr_id=$(gh pr list --json title,number,id -q "map(select(.title == \"$TITLE\")) | first | .id // \"Not Found\"")
+        pr_number=$(gh pr list --json title,number,id -q "map(select(.title == \"$TITLE\")) | first | .number // \"Not Found\"")
+
+        if test "$pr_id" = "Not Found"; then
+          echo "Creating New PR"
+          gh pr create --title "$TITLE" --body "${{ inputs.body }}"
+
+          pr_id=$(gh pr list --json title,number,id -q "map(select(.title == \"$TITLE\")) | first | .id // \"Not Found\"")
+          pr_number=$(gh pr list --json title,number,id -q "map(select(.title == \"$TITLE\")) | first | .number // \"Not Found\"")
+        fi
+
+        # echo "PR_ID: $pr_id | PR_NUMBER: $pr_number"
+        echo "PR_ID=$pr_id" | tee -a $GITHUB_OUTPUT
+        echo "PR_NUMBER=$pr_number" | tee -a $GITHUB_OUTPUT
+        set -e

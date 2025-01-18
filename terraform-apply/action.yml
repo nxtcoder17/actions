@@ -1,0 +1,47 @@
+name: "Terraform Apply"
+description: "applies an already generated terraform plan"
+
+inputs:
+  terraform_version: 
+    description: 'Terraform Version'
+    required: true
+    default: 1.10.4
+
+  working_directory:
+    description: 'working directory'
+    required: true
+
+  plan_file:
+    description: 'Already Created Terraform Plan file'
+    required: true
+
+outputs:
+  TF_APPLY_STDOUT:
+    description: "stdout for terraform apply command"
+    value: ${{ steps.tf-apply.outputs.APPLY_STDOUT }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ inputs.terraform_version }}
+        terraform_wrapper: false
+
+    - name: Terraform Init
+      shell: bash
+      run: |
+        pushd ${{ inputs.working_directory }}
+        terraform init
+        popd
+
+    - name: Terraform Apply
+      id: tf-apply
+      shell: bash
+      run: |
+        pushd ${{ inputs.working_directory }}
+        echo 'APPLY_STDOUT<<EOF' >> $GITHUB_OUTPUT
+        terraform apply -input=false -no-color ${{ inputs.plan_file }} >> $GITHUB_OUTPUT
+        echo 'EOF' >> $GITHUB_OUTPUT
+        popd
