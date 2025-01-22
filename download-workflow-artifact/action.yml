@@ -37,6 +37,6 @@ runs:
         GITHUB_TOKEN: ${{ inputs.github_token }}
       run: |+
         set -e 
-        run_id=$(gh run ls -R "${{ inputs.repository }}" --workflow="${{ inputs.workflow_name }}" --json number,databaseId -q 'first | .databaseId')
+        run_id=$(gh run ls -R "${{ inputs.repository }}" --workflow="${{ inputs.workflow_name }}" --json number,databaseId -q 'map(select(.conclusion == "success")) | first | .databaseId')
         gh run download "$run_id" -n "${{ inputs.artifact_name }}" -D "${{ inputs.destination }}"
         set +e
