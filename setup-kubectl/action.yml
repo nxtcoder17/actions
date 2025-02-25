@@ -1,0 +1,38 @@
+inputs:
+  version: 
+    description: "kubectl version"
+    required: false
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Detect CPU Architecture
+      shell: bash
+      run: |+
+        ARCH=$(uname -m)
+        if [ "$ARCH" == "aarch64" ]; then
+          echo "arch=arm64" | tee -a  $GITHUB_ENV
+        elif [ "$ARCH" == "x86_64" ]; then
+          echo "arch=amd64" | tee -a $GITHUB_ENV
+        else
+          echo "arch=unknown" | tee -a $GITHUB_ENV
+        fi
+
+    - name: install kubectl
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+      run: |+
+        dir=${{github.workspace}}/kubectl.d
+        mkdir -p $dir
+        pushd $dir
+        version=$VERSION
+        if [ -z "$version" ]; then
+          version=$(curl -L -s https://dl.k8s.io/release/stable.txt)
+        fi
+
+        curl -LO "https://dl.k8s.io/release/$version/bin/linux/${{ env.arch }}/kubectl" > ./kubectl
+        chmod +x kubectl
+        popd
+
+        echo "$dir" >> "$GITHUB_PATH"
