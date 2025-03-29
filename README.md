@@ -1,5 +1,16 @@
 ## collection of my common github actions
 
+### extract metadata
+
+extracts metadata from current git state
+
+```yaml
+# it will set 2 output variables
+# - version
+# - is_nightly
+- uses: nxtcoder17/actions/metadata@v1
+```
+
 ### generate-image-tag
 
 generates container image tag, based on github branch/tag name

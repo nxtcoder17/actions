@@ -1,0 +1,26 @@
+name: 'metadata from git state'
+description: 'extracts metadata like version, nightly etc. from github context, and git information'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Extract Metadata
+      shell: bash
+      run: |+
+        branch="${{ github.ref }}"
+
+        version=""
+        is_nightly=false
+
+        if [[ "$branch" =~ ^refs/heads/* ]]; then
+          version-"${branch#refs/heads/}"
+          is_nightly=true
+        fi
+
+        if [[ "$branch" =~ ^refs/tags/* ]]; then
+          version="${branch#refs/tag/}"
+          is_nightly=false
+        fi
+
+        echo "version=$version" | tee -a $GITHUB_OUTPUT
+        echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
