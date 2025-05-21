@@ -1,11 +1,29 @@
 name: 'extract metadata from git state'
 description: 'extracts metadata like version, nightly etc. from github context, and git information'
 
+outputs:
+  version:
+    description: "version"
+    value: ${{ steps.metadata.outputs.version }}
+
+  is_nightly:
+    description: "is_nightly"
+    value: ${{ steps.metadata.outputs.is_nightly }}
+
+  short_sha:
+    description: "short_sha"
+    value: ${{ steps.metadata.outputs.short_sha }}
+
+  sha:
+    description: "sha"
+    value: ${{ steps.metadata.outputs.sha }}
+
 runs:
   using: 'composite'
   steps:
     - name: Extract Metadata
       shell: bash
+      id: metadata
       run: |+
         branch="${{ github.ref }}"
 
