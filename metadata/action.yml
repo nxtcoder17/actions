@@ -1,4 +1,4 @@
-name: 'metadata from git state'
+name: 'extract metadata from git state'
 description: 'extracts metadata like version, nightly etc. from github context, and git information'
 
 runs:
@@ -13,8 +13,16 @@ runs:
         is_nightly=false
 
         if [[ "$branch" =~ ^refs/heads/* ]]; then
-          version-"${branch#refs/heads/}"
           is_nightly=true
+          version="${branch#refs/heads/}"
+          
+          if [[ $version == release-* ]]; then
+            version=${version#release-}
+          fi
+
+          if [[ $version != *-nightly ]]; then
+            version="${version}-nightly"
+          fi
         fi
 
         if [[ "$branch" =~ ^refs/tags/* ]]; then
@@ -23,4 +31,6 @@ runs:
         fi
 
         echo "version=$version" | tee -a $GITHUB_OUTPUT
+        echo "short_sha=$(git rev-parse --short HEAD)" | tee -a $GITHUB_OUTPUT
+        echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
         echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
