@@ -44,7 +44,7 @@ runs:
         fi
 
         if [[ "$branch" =~ ^refs/tags/* ]]; then
-          version="${branch#refs/tag/}"
+          version="${branch#refs/tags/}"
           is_nightly=false
         fi
 
