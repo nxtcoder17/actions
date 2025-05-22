@@ -11,10 +11,16 @@ inputs:
     description: "Docker username"
     required: true
 
+  qemu:
+    desciprtion: "Should Enable QEMU"
+    type: boolean
+    default: false
+
 runs:
   using: 'composite'
   steps:
     - name: Set up QEMU
+      if: ${{ inputs.qemu }}
       uses: docker/setup-qemu-action@v3
 
     - name: Set up Docker Buildx
