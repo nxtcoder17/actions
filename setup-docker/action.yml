@@ -20,7 +20,7 @@ runs:
   using: 'composite'
   steps:
     - name: Set up QEMU
-      if: ${{ inputs.qemu }}
+      if: ${{ inputs.qemu == 'true' }}
       uses: docker/setup-qemu-action@v3
 
     - name: Set up Docker Buildx

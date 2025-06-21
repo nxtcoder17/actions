@@ -40,9 +40,10 @@ setup docker buildx and login to a container registry
 ```yaml
 - uses: nxtcoder17/actions/setup-docker@v1
   with:
-    docker_registry: "ghcr.io"                       # defaults to github container registry
-    docker_username: ${{ github.actor }}             # defaults to github event actor
-    docker_password: ${{ secrets.GITHUB_TOKEN }}     # defaults to github access token
+    docker_registry: "ghcr.io"
+    docker_username: ${{ github.actor }}
+    docker_password: ${{ secrets.GITHUB_TOKEN }}
+    qemu: false
 ```
 
 ### setup-nix-cachix
