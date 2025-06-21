@@ -18,6 +18,10 @@ outputs:
     description: "sha"
     value: ${{ steps.metadata.outputs.sha }}
 
+  platform:
+    description: "platform info like linux/amd64, linux/arm64 etc."
+    value: ${{ steps.metadata.outputs.platform }}
+
 runs:
   using: 'composite'
   steps:
@@ -25,8 +29,10 @@ runs:
       shell: bash
       id: metadata
       run: |+
-        branch="${{ github.ref }}"
+        echo "short_sha=$(git rev-parse --short HEAD)" | tee -a $GITHUB_OUTPUT
+        echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
 
+        branch="${{ github.ref }}"
         version=""
         is_nightly=false
 
@@ -49,6 +55,14 @@ runs:
         fi
 
         echo "version=$version" | tee -a $GITHUB_OUTPUT
-        echo "short_sha=$(git rev-parse --short HEAD)" | tee -a $GITHUB_OUTPUT
-        echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
         echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
+
+        arch=$(uname -m)
+        case "$arch" in
+          x86_64) arch="amd64" ;;
+          aarch64) arch="arm64" ;;
+          armv7l) arch="arm" ;;
+          i386) arch="386" ;;
+        esac
+
+        echo "platform=$(uname -s | tr '[:upper:]' '[:lower:]')/$arch" | tee -a $GITHUB_OUTPUT
