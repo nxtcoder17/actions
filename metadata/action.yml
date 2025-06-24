@@ -6,6 +6,10 @@ outputs:
     description: "version"
     value: ${{ steps.metadata.outputs.version }}
 
+  semver:
+    description: "semver"
+    value: ${{ steps.metadata.outputs.semver }}
+
   is_nightly:
     description: "is_nightly"
     value: ${{ steps.metadata.outputs.is_nightly }}
@@ -33,28 +37,35 @@ runs:
         echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
 
         branch="${{ github.ref }}"
-        version=""
+        semver=""
         is_nightly=false
 
         if [[ "$branch" =~ ^refs/heads/* ]]; then
           is_nightly=true
-          version="${branch#refs/heads/}"
+          semver="${branch#refs/heads/}"
           
-          if [[ $version == release-* ]]; then
-            version=${version#release-}
+          if [[ $semver != *-nightly ]]; then
+            semver="${semver}-nightly"
           fi
 
-          if [[ $version != *-nightly ]]; then
-            version="${version}-nightly"
-          fi
+          semver="0.0.0-${semver}"
         fi
 
         if [[ "$branch" =~ ^refs/tags/* ]]; then
-          version="${branch#refs/tags/}"
           is_nightly=false
+          semver="${branch#refs/tags/}"
         fi
 
-        echo "version=$version" | tee -a $GITHUB_OUTPUT
+        if [[ $semver == release-* ]]; then
+          semver=${semver#release-}
+        fi
+
+        if [[ $semver == v* ]]; then
+          semver="${semver#v}"
+        fi
+
+        echo "semver=$semver" | tee -a $GITHUB_OUTPUT
+        echo "version=v${semver}" | tee -a $GITHUB_OUTPUT
         echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
 
         arch=$(uname -m)
