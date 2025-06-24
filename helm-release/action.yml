@@ -1,0 +1,193 @@
+name: 'helm-release'
+description: 'extracts metadata like version, nightly etc. from github context, and git information'
+
+inputs:
+  chart_version:
+    description: "Helm Chart Version"
+    type: string
+    required: true
+
+  chart_app_version: 
+    description: "helm chart appVersion for this release"
+    type: string
+    required: true
+
+  overwrite_release_assets:
+    type: boolean
+    description: "Should Overwrite Existing Release Assets"
+    required: false
+    default: false
+
+  charts:
+    type: string
+    description: "multi line string with chart paths"
+    required: true
+
+  github_release:
+    type: string
+    description: "Github Release over which tarballs would be uploaded"
+    required: true
+
+outputs:
+  artifact_id:
+    description: "artifact id of the uploaded helm index"
+    value: ${{ steps.upload.outputs.artifact_id }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install Helm
+      uses: azure/setup-helm@v4
+
+    - name: Setup Pages
+      uses: actions/configure-pages@v5
+
+    # - uses: actions/setup-python@v5
+    #   with:
+    #     python-version: 3.9
+
+    # - name: Installing yq (with pip)
+    #   run: |+
+    #     pip install yq
+
+    - name: Installing Chart Releaser
+      shell: bash
+      run: |+
+        CR_VERSION="1.5.0"
+        OS=$(uname -s | tr '[:upper:]' '[:lower:]')
+        ARCH=$(uname -m)
+        case "$ARCH" in
+          x86_64) ARCH="amd64" ;;
+          aarch64) ARCH="arm64" ;;
+          armv7l) ARCH="arm" ;;
+          i386) ARCH="386" ;;
+        esac
+
+        download_url="https://github.com/helm/chart-releaser/releases/download/v${CR_VERSION}/chart-releaser_${CR_VERSION}_${OS}_${ARCH}.tar.gz"
+        echo "OS: $OS, ARCH: $ARCH, CR_VERSION: $CR_VERSION"
+        echo "download url: $download_url"
+        curl -L0 $download_url > /tmp/chart-releaser.tar.gz && tar xf /tmp/chart-releaser.tar.gz -C /tmp && mv /tmp/cr /usr/local/bin/cr
+
+    - name: helm add repositories
+      shell: bash
+      run: |
+        while IFS= read -r chart; do
+          pushd $chart
+          helm dependency list 2> /dev/null | tail +2 | head -n -1 | awk '{ print "helm repo add " $1 " " $3 }' | while read cmd; do $cmd; done
+          helm dependency update
+          popd
+        done <<< "${{ inputs.charts }}"
+
+    - name: update version and appVersion in chart.yaml
+      shell: bash
+      env:
+        CHART_VERSION: ${{ inputs.chart_version }}
+        APP_VERSION: ${{ inputs.chart_app_version }}
+      run: |+
+        while IFS= read -r chart; do
+          pushd $chart
+          sed -i "s/^version:.*/version: ${CHART_VERSION}/g" Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: ${APP_VERSION}/g" Chart.yaml
+          popd
+        done <<< "${{ inputs.charts }}"
+
+    - name: Package Charts
+      shell: bash
+      id: packaging
+      run: |+
+        tar_dir=".chart-releases"
+        while IFS= read -r chart; do
+          cr package "$chart" --package-path $tar_dir
+        done <<< "${{ inputs.charts }}"
+
+        echo "tar_dir=$tar_dir" | tee -a $GITHUB_OUTPUT
+
+    - name: Regenerating Helm Repository Index
+      shell: bash
+      id: helm-index
+      env:
+        tar_dir: ${{ steps.packaging.outputs.tar_dir }}
+        CHART_VERSION: ${{ inputs.chart_version }}
+      run: |+
+        REPO_NAME=${GITHUB_REPOSITORY#$GITHUB_REPOSITORY_OWNER/}
+        index_file_url="https://${{ github.repository_owner }}.github.io/${REPO_NAME}/index.yaml"
+        curl -f -L0 "$index_file_url" >$tar_dir/index.yaml
+        echo "+++++++ current: index.yaml"
+        cat $tar_dir/index.yaml
+
+        cat $tar_dir/index.yaml | yq '. | (
+          .entries = (
+            .entries | map_values([
+                          .[] | select(
+                            (. != null) and (.version != env.CHART_VERSION)
+                          )
+                        ])
+          )
+        )' -y >$tar_dir/old-index.yaml
+
+        helm repo index --debug $tar_dir --url "https://github.com/${{ github.repository }}/releases/download/${{ inputs.github_release }}"
+
+        cp $tar_dir/index.yaml $tar_dir/new-index.yaml
+        keys=$(cat $tar_dir/index.yaml | yq '.entries | keys |.[]' -r)
+        pushd $tar_dir
+        for key in $keys; do
+          echo "merging for chart: $key"
+          cat index.yaml | yq '.entries[$key] = ($entries|fromjson)' --arg key "$key" --arg entries "$(yq -s '.' index.yaml old-index.yaml | jq --arg key "$key" '(.[0].entries[$key] + .[1].entries[$key])' -r)" -y >new-index.yaml
+          mv new-index.yaml index.yaml
+        done
+        popd
+
+        echo "+++++++ new: index.yaml"
+        cat $tar_dir/index.yaml
+
+    - name: Upload Chart Tarballs
+      shell: bash
+      run: |+
+        opts=("-R" "${{ github.repository }}")
+        if [[ "${{inputs.overwrite_release_assets }}" = "true" ]]; then
+          opts+=("--clobber")
+        fi
+
+        gh release upload "${{ inputs.github_release }}" ${opts[@]} ${{steps.packaging.outputs.tar_dir}}/*.tgz
+
+    - name: create static page to host helm index
+      shell: bash
+      id: static-page
+      env:
+        tar_dir: ${{ steps.packaging.outputs.tar_dir }}
+      run: |+
+        mkdir -p .static-pages
+        cp $tar_dir/index.yaml .static-pages/index.yaml
+
+        opts=("-R" "${{ github.repository }}")
+        if [[ "${{inputs.overwrite_release_assets }}" = "true" ]]; then
+          opts+=("--clobber")
+        fi
+
+        gh release upload "${{ inputs.github_release }}" ${opts[@]} .static-pages/index.yaml#helm-repo-index.yaml
+
+        cat >.static-pages/index.html <<EOF
+        <html>
+          <head>
+            <title>${{github.repository}} helm chart - $chart_version </title>
+            <meta name="revised" content="$(date -Iseconds)" />
+          </head>
+
+          <body>
+            <p>
+              Hey, you must be looking for <a href="./index.yaml">index.yaml</a>.
+            </p>
+          </body>
+        </html>
+        EOF
+
+        echo "static_dir=.static-pages" | tee -a $GITHUB_OUTPUT
+
+    - name: Upload pages artifact
+      uses: actions/upload-pages-artifact@v3
+      id: upload
+      with:
+        name: github-pages
+        path: ${{ steps.static-page.outputs.static_dir}}
+
+
