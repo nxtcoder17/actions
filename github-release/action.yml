@@ -1,0 +1,36 @@
+name: 'github-release'
+description: 'manages a github release based on release name'
+
+inputs:
+  name:
+    description:  "Github Release Name"
+    type: string
+    required: true
+
+  github_token:
+    description: 'GITHUB_TOKEN or a repo scoped PAT.'
+    type: string
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: create github release
+      shell: bash
+      if: ${{ steps.meta.outputs.is_nightly == 'false' }}
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        version: ${{ inputs.name }}
+      run: |+
+          if [[ "${{inputs.name}}" == *-nightly ]]; then
+            if gh release list -R ${{github.repository}} --json name | jq -e --argjson val ${version} 'map_values(.name) | index($val) != null'; then
+              gh release delete ${version} -y --cleanup-tag -R ${{ github.repository }}
+            fi
+
+            gh release create "${version}" -R "${{ github.repository }}" --generate-notes --prerelease
+            exit 0
+          fi
+
+          if gh release list -R ${{github.repository}} --json name | jq -e --argjson val ${version} 'map_values(.name) | index($val) == null'; then
+            gh release create "${version}" -R "${{ github.repository }}" --generate-notes
+          fi
