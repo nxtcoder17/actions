@@ -1,0 +1,38 @@
+name: 'github-release-upload'
+description: 'upload files into a github release'
+
+inputs:
+  name:
+    description:  "Github Release Name"
+    type: string
+    required: true
+
+  github_token:
+    description: 'GITHUB_TOKEN or a repo scoped PAT.'
+    type: string
+    required: true
+
+  files:
+    type: string
+    description: "multi line string with files to upload"
+    required: true
+
+runs:
+  using: 'composite'
+  steps:
+    - name: upload files to github release
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github_token }}
+        version: ${{ inputs.name }}
+      run: |+
+          opts=("-R", "${{github.repository}}")
+
+          if gh release list -R kloudlite/wireguard --json name,isPrerelease | jq -e --argval version ${version} '.[] | select(.name == "$version" and .isPrerelease)' > /dev/null; then
+            opts+=("--clobber")
+          fi
+
+          while IFS= read -r upload_target; do
+            [[ -z "$upload_target" ]] && continue
+            gh release upload "${{ inputs.name }}" ${opts[@]} $upload_target
+          done <<< "${{ inputs.files }}"
