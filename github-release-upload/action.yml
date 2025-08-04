@@ -26,13 +26,13 @@ runs:
         GH_TOKEN: ${{ inputs.github_token }}
         version: ${{ inputs.name }}
       run: |+
-          opts=("-R", "${{github.repository}}")
+          opts=("-R" "${{github.repository}}")
 
-          if gh release list -R kloudlite/wireguard --json name,isPrerelease | jq -e --argval version ${version} '.[] | select(.name == "$version" and .isPrerelease)' > /dev/null; then
+          if gh release list -R ${{github.repository}} --json name,isPrerelease | jq -e --arg version "${version}" '.[] | select(.name == "$version" and .isPrerelease)' > /dev/null; then
             opts+=("--clobber")
           fi
 
           while IFS= read -r upload_target; do
             [[ -z "$upload_target" ]] && continue
-            gh release upload "${{ inputs.name }}" ${opts[@]} $upload_target
+            gh release upload "${version}" ${opts[@]} $upload_target
           done <<< "${{ inputs.files }}"
