@@ -3,70 +3,143 @@ description: 'extracts metadata like version, nightly etc. from github context, 
 
 outputs:
   version:
-    description: "version"
+    description: "Version is just v prefixed to semver as in 'v.${SEMVER}'"
     value: ${{ steps.metadata.outputs.version }}
 
   semver:
-    description: "semver"
+    description: "semver in format <MAJOR>.<MINOR>.<PATCH> like 1.2.4, 2.3.1 etc."
     value: ${{ steps.metadata.outputs.semver }}
 
-  is_nightly:
-    description: "is_nightly"
-    value: ${{ steps.metadata.outputs.is_nightly }}
+  calver:
+    description: "Calendar Version"
+    value: ${{ steps.metadata.outputs.calver }}
 
-  short_sha:
-    description: "short_sha"
-    value: ${{ steps.metadata.outputs.short_sha }}
+  is_tag:
+    description: "If event is from a tag"
+    value: ${{ steps.metadata.outputs.is_tag }}
 
-  sha:
-    description: "sha"
-    value: ${{ steps.metadata.outputs.sha }}
+  ref_slug:
+    description: "Git Ref Slug"
+    value: ${{ steps.metadata.outputs.ref_slug }}
 
-  platform:
+  ref_raw:
+    description: "Git Ref Raw"
+    value: ${{ steps.metadata.outputs.ref_raw }}
+
+  default_branch_raw:
+    description: "Default Branch Name"
+    value: ${{ steps.metadata.outputs.default_branch_raw }}
+
+  default_branch_slug:
+    description: "Default Branch Slug"
+    value: ${{ steps.metadata.outputs.default_branch_slug }}
+
+  timestamp:
+    description: "Metadata extraction timestamp"
+    value: ${{ steps.metadata.outputs.timestamp }}
+
+  commit_slug:
+    description: "git commit short SHA"
+    value: ${{ steps.metadata.outputs.commit_slug }}
+
+  commit_raw:
+    description: "full git commit SHA"
+    value: ${{ steps.metadata.outputs.commit_raw }}
+
+  runner_arch:
+    description: "arch in GOARCH format like amd64, arm64, arm etc."
+    value: ${{ steps.metadata.outputs.runner_arch }}
+
+  runner_platform:
     description: "platform info like linux/amd64, linux/arm64 etc."
-    value: ${{ steps.metadata.outputs.platform }}
+    value: ${{ steps.metadata.outputs.runner_platform }}
 
 runs:
   using: 'composite'
   steps:
-    - name: Extract Metadata
+    - name: Extract Git Metadata
       shell: bash
       id: metadata
-      run: |+
-        echo "short_sha=$(git rev-parse --short HEAD)" | tee -a $GITHUB_OUTPUT
-        echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
+      run: |+ #bash
+        short_sha="${GITHUB_SHA::7}"
 
-        branch="${{ github.ref }}"
         semver=""
-        is_nightly=false
+        calver="$(date -u +%Y.%m.%d)"
+        is_tag=false
 
-        if [[ "$branch" =~ ^refs/heads/* ]]; then
-          is_nightly=true
-          semver="${branch#refs/heads/}"
+        default_branch_raw=${{ github.event.repository.default_branch }}
+        default_branch_slug=$(echo $default_branch_raw | sed 's/[^a-zA-Z0-9._-]/-/g')
+
+        sanitized_ref=""
+        ref_raw="${{ github.ref }}"
+        ref_slug=""
+
+        if [[ "$ref_raw" =~ ^refs/pull/* ]]; then
+          # INFO: when running for a pull request
+          ref_slug="pr-${{github.event.pull_request.number}}"
+          current_latest_tag=$(git tag --sort=-creatordate | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0")
+          current_latest_tag="${current_latest_tag#v}"
           
-          if [[ $semver != *-nightly ]]; then
-            semver="${semver}-nightly"
+          # Parse and increment patch version
+          IFS='.' read -r major minor patch <<< "$current_latest_tag"
+          patch=$((patch + 1))
+          
+          semver="${major}.${minor}.${patch}-${ref_slug}"
+          calver+="-${ref_slug}"
+        fi
+
+        semver_regex='^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+        if [[ "$ref_raw" =~ ^refs/heads/* ]]; then
+          # INFO: it is a branch
+          # is_nightly=true
+
+          current_latest_tag=$(git tag --sort=-creatordate | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0")
+          current_latest_tag="${current_latest_tag#v}"
+          
+          # Parse and increment patch version
+          IFS='.' read -r major minor patch <<< "$current_latest_tag"
+          patch=$((patch + 1))
+          
+          ref_slug=$(echo ${ref_raw#refs/heads/} | sed 's/[^a-zA-Z0-9_-]/-/g')
+          semver="${major}.${minor}.${patch}-${ref_slug}"
+          calver+="-${ref_slug}.${short_sha}"
+        fi
+
+        if [[ "$ref_raw" =~ ^refs/tags/.* ]]; then
+          tag="${ref_raw#refs/tags/}"
+          is_tag=true
+
+          if [[ "$tag" =~ $semver_regex ]]; then
+            semver="$tag"
+            calver+="+${tag}"
+          else
+            # Sanitize: remove invalid chars and prepend a base version
+            ref_slug=$(echo "$tag" | sed 's/[^a-zA-Z0-9_-]/-/g')
+            semver="0.1.0-${ref_slug}"
+            calver+=".${ref_slug}"
           fi
-
-          semver="0.0.0-${semver}"
-        fi
-
-        if [[ "$branch" =~ ^refs/tags/* ]]; then
-          is_nightly=false
-          semver="${branch#refs/tags/}"
-        fi
-
-        if [[ $semver == release-* ]]; then
-          semver=${semver#release-}
         fi
 
         if [[ $semver == v* ]]; then
           semver="${semver#v}"
         fi
 
-        echo "semver=$semver" | tee -a $GITHUB_OUTPUT
+        echo "semver=${semver}" | tee -a $GITHUB_OUTPUT
+        echo "calver=${calver}" | tee -a $GITHUB_OUTPUT
         echo "version=v${semver}" | tee -a $GITHUB_OUTPUT
-        echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
+        echo "is_tag=${is_tag}" | tee -a $GITHUB_OUTPUT
+
+        echo "ref_raw=${ref_raw}" | tee -a $GITHUB_OUTPUT
+        echo "ref_slug=${ref_slug}" | tee -a $GITHUB_OUTPUT
+
+        echo "default_branch_raw=${default_branch_raw}" | tee -a $GITHUB_OUTPUT
+        echo "default_branch_slug=${default_branch_slug}" | tee -a $GITHUB_OUTPUT
+
+        echo "commit_raw=${GITHUB_SHA}" | tee -a $GITHUB_OUTPUT
+        echo "commit_slug=${short_sha}" | tee -a $GITHUB_OUTPUT
+
+        echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$GITHUB_OUTPUT"
 
         arch=$(uname -m)
         case "$arch" in
@@ -76,4 +149,5 @@ runs:
           i386) arch="386" ;;
         esac
 
-        echo "platform=$(uname -s | tr '[:upper:]' '[:lower:]')/$arch" | tee -a $GITHUB_OUTPUT
+        echo "runner_arch=$arch" | tee -a $GITHUB_OUTPUT
+        echo "runner_platform=$(uname -s | tr '[:upper:]' '[:lower:]')/$arch" | tee -a $GITHUB_OUTPUT
