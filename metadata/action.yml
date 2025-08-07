@@ -3,24 +3,40 @@ description: 'extracts metadata like version, nightly etc. from github context, 
 
 outputs:
   version:
-    description: "version"
+    description: "Version is just v prefixed to semver as in 'v.${SEMVER}'"
     value: ${{ steps.metadata.outputs.version }}
 
   semver:
-    description: "semver"
+    description: "semver in format <MAJOR>.<MINOR>.<PATCH> like 1.2.4, 2.3.1 etc."
     value: ${{ steps.metadata.outputs.semver }}
+
+  calver:
+    description: "Calendar Version"
+    value: ${{ steps.metadata.outputs.calver }}
 
   is_nightly:
     description: "is_nightly"
     value: ${{ steps.metadata.outputs.is_nightly }}
 
+  sanitized_ref:
+    description: "Sanitized Ref"
+    value: ${{ steps.metadata.outputs.sanitized_ref }}
+
+  timestamp:
+    description: "Metadata extraction timestamp"
+    value: ${{ steps.metadata.outputs.timestamp }}
+
   short_sha:
-    description: "short_sha"
+    description: "git commit short SHA"
     value: ${{ steps.metadata.outputs.short_sha }}
 
   sha:
-    description: "sha"
+    description: "full git commit SHA"
     value: ${{ steps.metadata.outputs.sha }}
+
+  arch:
+    description: "arch in GOARCH format like amd64, arm64, arm etc."
+    value: ${{ steps.metadata.outputs.arch }}
 
   platform:
     description: "platform info like linux/amd64, linux/arm64 etc."
@@ -29,44 +45,63 @@ outputs:
 runs:
   using: 'composite'
   steps:
-    - name: Extract Metadata
+    - name: Extract Git Metadata
       shell: bash
       id: metadata
-      run: |+
-        echo "short_sha=$(git rev-parse --short HEAD)" | tee -a $GITHUB_OUTPUT
-        echo "sha=${{ github.sha }}" | tee -a $GITHUB_OUTPUT
+      run: |+ #bash
+        short_sha="${GITHUB_SHA::7}"
+        git_ref="${{ github.ref }}"
 
-        branch="${{ github.ref }}"
         semver=""
+        calver="$(date -u +%Y.%m.%d)"
         is_nightly=false
 
-        if [[ "$branch" =~ ^refs/heads/* ]]; then
+        sanitized_ref=""
+
+        if [[ "$git_ref" =~ ^refs/pull/* ]]; then
+          # INFO: when running for a pull request
+          sanitized_ref="pr-${{github.event.pull_request.number}}"
+        end
+
+        semver_regex='^v?[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$'
+
+        if [[ "$git_ref" =~ ^refs/heads/* ]]; then
+          # INFO: it is a branch
           is_nightly=true
-          semver="${branch#refs/heads/}"
-          
-          if [[ $semver != *-nightly ]]; then
-            semver="${semver}-nightly"
-          fi
 
-          semver="0.0.0-${semver}"
+          current_latest_tag=$(git tag --sort=-creatordate | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.0.0")
+          sanitized_ref=$(echo ${git_ref#refs/heads/} | sed 's/[^a-zA-Z0-9._-]/-/g')
+          semver="${current_latest_tag}-nightly+${sanitized_ref}.${short_sha}"
+          calver+="-nightly+${sanitized_branch}.${short_sha}"
         fi
 
-        if [[ "$branch" =~ ^refs/tags/* ]]; then
+        if [[ "$git_ref" =~ ^refs/tags/.* ]]; then
           is_nightly=false
-          semver="${branch#refs/tags/}"
-        fi
+          tag="${branch#refs/tags/}"
 
-        if [[ $semver == release-* ]]; then
-          semver=${semver#release-}
+          if [[ "$tag" =~ $semver_regex ]]; then
+            semver="$tag"
+            calver+="+${tag}"
+          else
+            # Sanitize: remove invalid chars and prepend a base version
+            sanitized_ref=$(echo "$tag" | sed 's/[^a-zA-Z0-9._-]/-/g')
+            semver="0.0.0+${sanitized_ref}"
+            calver+="+${sanitizied_ref}"
+          fi
         fi
 
         if [[ $semver == v* ]]; then
           semver="${semver#v}"
         fi
 
-        echo "semver=$semver" | tee -a $GITHUB_OUTPUT
+        echo "semver=${semver}" | tee -a $GITHUB_OUTPUT
+        echo "calver=${calver}" | tee -a $GITHUB_OUTPUT
         echo "version=v${semver}" | tee -a $GITHUB_OUTPUT
-        echo "is_nightly=$is_nightly" | tee -a $GITHUB_OUTPUT
+        echo "is_nightly=${is_nightly}" | tee -a $GITHUB_OUTPUT
+        echo "sanitized_ref=${sanitized_ref}" | tee -a $GITHUB_OUTPUT
+        echo "timestamp=$(date -u +%Y-%m-%dT%H:%M:%SZ)" | tee -a "$GITHUB_OUTPUT"
+        echo "short_sha=${short_sha}" | tee -a "$GITHUB_OUTPUT"
+        echo "sha=${{ github.sha }}" | tee -a "$GITHUB_OUTPUT"
 
         arch=$(uname -m)
         case "$arch" in
@@ -76,4 +111,5 @@ runs:
           i386) arch="386" ;;
         esac
 
+        echo "arch=$arch" | tee -a $GITHUB_OUTPUT
         echo "platform=$(uname -s | tr '[:upper:]' '[:lower:]')/$arch" | tee -a $GITHUB_OUTPUT
