@@ -1,5 +1,5 @@
-name: 'github-release'
-description: 'manages a github release based on release name'
+name: github-release-create
+description: 'creates a github release based on release name'
 
 inputs:
   name:
@@ -12,6 +12,10 @@ inputs:
     type: string
     required: true
 
+  pre_release:
+    type: boolean
+    default: false
+
 runs:
   using: 'composite'
   steps:
@@ -20,16 +24,21 @@ runs:
       env:
         GH_TOKEN: ${{ inputs.github_token }}
         version: ${{ inputs.name }}
+        pre_release: ${{ inputs.pre_release }}
       run: |+
-          if [[ "${{inputs.name}}" == *-nightly ]]; then
-            if gh release list -R ${{github.repository}} --json name | jq -e --arg val "${version}" 'map_values(.name) | index($val) != null'; then
-              gh release delete ${version} -y --cleanup-tag -R ${{ github.repository }}
-            fi
-
-            gh release create "${version}" -R "${{ github.repository }}" --generate-notes --prerelease
+        if gh release list -R ${{github.repository}} --json name | jq -e --arg val "${version}" 'map_values(.name) | index($val) != null'; then
+          # means already exists
+          if $pre_release; then
+            gh release delete ${version} -y --cleanup-tag -R ${{ github.repository }}
+          else
+            echo "Release ($version) already exists, reusing it"
             exit 0
           fi
+        fi
 
-          if gh release list -R ${{github.repository}} --json name | jq -e --arg val "${version}" 'map_values(.name) | index($val) == null'; then
-            gh release create "${version}" -R "${{ github.repository }}" --generate-notes
-          fi
+        args=("--generate-notes")
+        if $pre_release; then
+          args+=("--prerelease")
+        fi
+
+        gh release create "${version}" -R "${{ github.repository }}" ${args[@]}
