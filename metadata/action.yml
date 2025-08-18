@@ -64,6 +64,8 @@ runs:
     - name: Extract Git Metadata
       shell: bash
       id: metadata
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |+ #bash
         short_sha="${GITHUB_SHA::7}"
 
@@ -77,9 +79,11 @@ runs:
         sanitized_ref=""
         ref_raw="${{ github.ref }}"
         ref_slug=""
+ 
+        echo "[DEBUG] Last Latest Release : $(gh release list -R ${{github.repository}} --json name,isLatest | jq '.[]|select(.isLatest).name' -r)"
 
         function get_latest_tag() {
-          gh release list -R ${{github.repository}} --json name,isLatest | jq '.[]|select(.isLatest).name' | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0"
+          gh release list -R ${{github.repository}} --json name,isLatest | jq '.[]|select(.isLatest).name' -r | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0"
         }
 
         if [[ "$ref_raw" =~ ^refs/pull/* ]]; then
