@@ -18,6 +18,10 @@ outputs:
     description: "If event is from a tag"
     value: ${{ steps.metadata.outputs.is_tag }}
 
+  is_pre_release:
+    description: "If event is not a tag, meaning it is a pre-release event"
+    value: ${{ !fromJSON(steps.metadata.outputs.is_tag) }}
+
   ref_slug:
     description: "Git Ref Slug"
     value: ${{ steps.metadata.outputs.ref_slug }}
@@ -74,10 +78,14 @@ runs:
         ref_raw="${{ github.ref }}"
         ref_slug=""
 
+        function get_latest_tag() {
+          gh release list -R ${{github.repository}} --json name,isLatest | jq '.[]|select(.isLatest).name' | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0"
+        }
+
         if [[ "$ref_raw" =~ ^refs/pull/* ]]; then
           # INFO: when running for a pull request
           ref_slug="pr-${{github.event.pull_request.number}}"
-          current_latest_tag=$(git tag --sort=-creatordate | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0")
+          current_latest_tag=$(get_latest_tag)
           current_latest_tag="${current_latest_tag#v}"
           
           # Parse and increment patch version
@@ -92,9 +100,7 @@ runs:
 
         if [[ "$ref_raw" =~ ^refs/heads/* ]]; then
           # INFO: it is a branch
-          # is_nightly=true
-
-          current_latest_tag=$(git tag --sort=-creatordate | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | head -n1 || echo "0.1.0")
+          current_latest_tag=$(get_latest_tag)
           current_latest_tag="${current_latest_tag#v}"
           
           # Parse and increment patch version
